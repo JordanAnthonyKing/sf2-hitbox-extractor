@@ -16,13 +16,13 @@ local boxes = {
 	      ["air throwable"] = {color = 0x202020, fill = 0x00, outline = 0xFF},
 }
 
-local AXIS_COLOR           = 0x7F7F7FFF
+local AXIS_COLOR           = 0xFF0000FF
 local BLANK_COLOR          = 0xFFFFFFFF
 local AXIS_SIZE            = 4
 local MINI_AXIS_SIZE       = 2
 local BLANK_SCREEN         = false
 local DRAW_AXIS            = true
-local DRAW_MINI_AXIS       = true
+local DRAW_MINI_AXIS       = false
 local DRAW_PUSHBOXES       = true
 local DRAW_THROWABLE_BOXES = true
 local DRAW_DELAY           = 0
@@ -363,22 +363,32 @@ local function draw_axis(obj)
 	gui.drawline(obj.pos_x-AXIS_SIZE, obj.pos_y, obj.pos_x+AXIS_SIZE, obj.pos_y, AXIS_COLOR)
 end
 
-local function write_hitbox(obj, entry)
+local function write_hitbox(obj, entry, proj)
+	written_this_frame = true
 	local hb = obj[entry]
 
-	local h_origin = hb.hval - obj.pos_x
-	local v_origin = hb.vval - obj.pos_y
-	local hb_width = hb.right - hb.left
-	local hb_height = hb.bottom - hb.top
-	
-	file:write(frameCount .. " " .. hb.type .. " origin: " .. h_origin .. " , " .. v_origin .. " width: " .. hb_width .. " height: " .. hb_height .. "\n")
+	if proj then
+		-- Using origin and width+height
+		local h_origin = hb.hval - obj.pos_x
+		local v_origin = hb.vval - obj.pos_y
+		local hb_width = hb.right - hb.left
+		local hb_height = hb.bottom - hb.top
+		file:write(frameCount .. " " .. hb.type .. " origin: " .. h_origin .. " , " .. v_origin .. " width: " .. hb_width .. " height: " .. hb_height .. "\n")
+	else 
+		-- Using left, top, right, bottom
+		local relative_right = hb.right - obj.pos_x
+		local relative_left = hb.left - obj.pos_x
+		local relative_top = hb.top - obj.pos_y
+		local relative_bottom = hb.bottom - obj.pos_y
+
+		file:write(frameCount .. " " .. hb.type .. " left: " .. relative_left .. " top: " .. relative_top .. " right: " .. relative_right .. " bottom: " .. relative_bottom .. "\n")
+	end
 end
 
 
 local function render_sf2_hitboxes()
 	frameCount = frameCount + 1
 	file = io.open("hitboxes.txt", "a")
-	file:write("\n");
 
 	if not game or not frame_buffer[1].status or not draw_hitboxes then
 		return
@@ -393,17 +403,18 @@ local function render_sf2_hitboxes()
 			local obj = frame_buffer[1][projectiles][i]
 			if obj[entry] then
 				draw_hitbox(obj, entry)
+				write_hitbox(obj, entry, true)
 			end
 		end
 
-		-- for p = 1, NUMBER_OF_PLAYERS do
+		for p = 1, NUMBER_OF_PLAYERS do
 			-- local obj = frame_buffer[1][player][p]
 			local obj = frame_buffer[1][player][1]
 			if obj and obj[entry] then
 				draw_hitbox(obj, entry)
-				write_hitbox(obj, entry)
+				write_hitbox(obj, entry, false)
 			end
-		-- end
+		end
 	end
 
 	if DRAW_AXIS then
@@ -415,6 +426,9 @@ local function render_sf2_hitboxes()
 		end
 	end
 
+	if written_this_frame then
+		file:write("\n"); -- prevent empty line spam
+	end
 	file:close()
 end
 
@@ -423,6 +437,7 @@ end
 
 local function whatgame()
 	frameCount = 0;
+	written_this_frame = false;
 	game = nil
 	for n, module in ipairs(profile) do
 		for m, shortname in ipairs(module.games) do
